@@ -1,0 +1,463 @@
+From 01633f90c3ad8f4b3f5057a19d58c474893c3d5f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=F0=9F=A7=80=20Harold?=
+ <55301634+ZECHEESELORD@users.noreply.github.com>
+Date: Wed, 3 Jun 2026 18:18:00 -0400
+Subject: [PATCH 1/2] Port YUNG's Bridges build to Minecraft 1.21.11
+
+---
+ Common/build.gradle                      | 12 +++++++----
+ Fabric/build.gradle                      | 14 +++++++------
+ build.gradle                             |  4 ++--
+ gradle.properties                        | 20 +++++++++---------
+ gradle/wrapper/gradle-wrapper.properties |  2 +-
+ settings.gradle                          | 26 ++++++++++++------------
+ 6 files changed, 42 insertions(+), 36 deletions(-)
+
+diff --git a/Common/build.gradle b/Common/build.gradle
+index f53a1f9..f07e532 100644
+--- a/Common/build.gradle
++++ b/Common/build.gradle
+@@ -3,7 +3,11 @@ plugins {
+     id 'org.spongepowered.gradle.vanilla' version '0.2.1-SNAPSHOT'
+ }
+ 
+-def useLocalYungsApi = findProject(':yungsapi') != null
++def localYungsApi = rootProject.file("../yungapi/settings.gradle").exists()
++def localYungsApiCommonJar = files(rootProject.file("../yungapi/Common/build/libs/YungsApi-${mc_version}-Common-${yungsapi_version}.jar"))
++if (localYungsApi) {
++    localYungsApiCommonJar.builtBy(gradle.includedBuild("yungapi").task(":Common:jar"))
++}
+ 
+ minecraft {
+     version(mc_version)
+@@ -15,8 +19,8 @@ minecraft {
+ 
+ dependencies {
+     compileOnly group:'org.spongepowered', name:'mixin', version:'0.8.5'
+-    if (useLocalYungsApi) {
+-        compileOnly files("libs/YungsApi-${mc_version}-Common-${yungsapi_version}.jar")
++    if (localYungsApi) {
++        compileOnly localYungsApiCommonJar
+     } else {
+         compileOnly("com.yungnickyoung.minecraft.yungsapi:YungsApi:${mc_version}-Common-${yungsapi_version}")
+     }
+@@ -49,4 +53,4 @@ artifacts {
+     commonJava sourceSets.main.java.sourceDirectories.singleFile
+     commonResources sourceSets.main.resources.sourceDirectories.singleFile
+     commonGeneratedResources sourceSets.generated.resources.sourceDirectories.singleFile
+-}
+\ No newline at end of file
++}
+diff --git a/Fabric/build.gradle b/Fabric/build.gradle
+index de1549b..dd36fb0 100644
+--- a/Fabric/build.gradle
++++ b/Fabric/build.gradle
+@@ -5,7 +5,11 @@ plugins {
+     id 'com.modrinth.minotaur'
+ }
+ 
+-def useLocalYungsApi = findProject(':yungsapi') != null
++def localYungsApi = rootProject.file("../yungapi/settings.gradle").exists()
++def localYungsApiFabricJar = files(rootProject.file("../yungapi/Fabric/build/libs/YungsApi-${mc_version}-Fabric-${yungsapi_version}.jar"))
++if (localYungsApi) {
++    localYungsApiFabricJar.builtBy(gradle.includedBuild("yungapi").task(":Fabric:remapJar"))
++}
+ 
+ repositories {
+     maven { url "https://maven.shedaniel.me/" }
+@@ -16,12 +20,10 @@ dependencies {
+     minecraft "com.mojang:minecraft:${mc_version}"
+     mappings loom.layered {
+         officialMojangMappings()
+-        parchment("org.parchmentmc.data:parchment-${parchment_minecraft}:${parchment_version}@zip")
+     }
+ 
+-    // YUNG's API
+-    if (useLocalYungsApi) {
+-        modImplementation files("libs/YungsApi-${mc_version}-Fabric-${yungsapi_version}.jar")
++    if (localYungsApi) {
++        modImplementation localYungsApiFabricJar
+     } else {
+         modImplementation "com.yungnickyoung.minecraft.yungsapi:YungsApi:${mc_version}-Fabric-${yungsapi_version}"
+     }
+@@ -107,4 +109,4 @@ modrinth {
+         optional.project "modmenu"
+     }
+ }
+-tasks.modrinth.dependsOn(tasks.remapJar)
+\ No newline at end of file
++tasks.modrinth.dependsOn(tasks.remapJar)
+diff --git a/build.gradle b/build.gradle
+index 081b607..ced4034 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,5 +1,5 @@
+ plugins {
+-    id 'fabric-loom' version '1.10-SNAPSHOT' apply false
++    id 'fabric-loom' version '1.13.6' apply false
+     id "org.jetbrains.gradle.plugin.idea-ext" version "1.1.7" // required for NeoGradle
+     id 'org.spongepowered.mixin' version '0.7-SNAPSHOT' apply false
+     id 'net.darkhax.curseforgegradle' version "${curseforgegradle_version}" apply false // curseforge publishing
+@@ -25,4 +25,4 @@ task publishCurseForge(dependsOn: [':Fabric:publishCurseForgeFabric', ':NeoForge
+ task publishModrinth(dependsOn: [':Fabric:modrinth', ':NeoForge:modrinth']) {
+ }
+ task publishCurseAndModrinth(dependsOn: ['publishCurseForge', 'publishModrinth']) {
+-}
+\ No newline at end of file
++}
+diff --git a/gradle.properties b/gradle.properties
+index 8b86e36..95eff4a 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -11,26 +11,26 @@ mod_description=Adds naturally occurring bridges throughout the world!
+ mod_credits=Thanks so much to all my patrons!
+ license=LGPLv3
+ maven_group=com.yungnickyoung.minecraft.yungsbridges
+-mc_version=1.21.4
+-mc_version_range=[1.21.4, 1.22)
+-mc_version_range_fabric=>=1.21.4
+-parchment_minecraft=1.21.4
+-parchment_version=2024.12.22
++mc_version=1.21.11
++mc_version_range=[1.21.11, 1.22)
++mc_version_range_fabric=>=1.21.11
++parchment_minecraft=1.21.11
++parchment_version=2025.10.12
+ 
+ # CurseGradle & Minotaur
+ curseforgegradle_version=1.1.15
+-compatible_versions=1.21.4
++compatible_versions=1.21.11
+ curseforge_project_id_fabric=590988
+ curseforge_project_id_neoforge=536660
+ modrinth_project_id=Ht4BfYp6
+ debug_publish=true
+ 
+ # Common
+-yungsapi_version=5.4.0
++yungsapi_version=5.10.0-beta0
+ 
+ # Fabric
+-fabric_version=0.112.2
+-fabric_loader_version=0.16.9
++fabric_version=0.141.3
++fabric_loader_version=0.18.6
+ clothconfig_version_fabric=17.0.144
+ modmenu_version_fabric=13.0.3
+ 
+@@ -45,4 +45,4 @@ modrinthToken=""
+ 
+ # Gradle
+ org.gradle.jvmargs=-Xmx3G
+-org.gradle.daemon=false
+\ No newline at end of file
++org.gradle.daemon=false
+diff --git a/gradle/wrapper/gradle-wrapper.properties b/gradle/wrapper/gradle-wrapper.properties
+index b836b84..a92432b 100644
+--- a/gradle/wrapper/gradle-wrapper.properties
++++ b/gradle/wrapper/gradle-wrapper.properties
+@@ -2,4 +2,4 @@ distributionBase=GRADLE_USER_HOME
+ distributionPath=wrapper/dists
+ zipStoreBase=GRADLE_USER_HOME
+ zipStorePath=wrapper/dists
+-distributionUrl=https\://services.gradle.org/distributions/gradle-8.12-bin.zip
++distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.1-bin.zip
+diff --git a/settings.gradle b/settings.gradle
+index fab6bf6..0e53b3b 100644
+--- a/settings.gradle
++++ b/settings.gradle
+@@ -2,18 +2,7 @@ pluginManagement {
+     repositories {
+         gradlePluginPortal()
+         mavenCentral()
+-        exclusiveContent {
+-            forRepository {
+-                maven {
+-                    name = 'Fabric'
+-                    url = uri("https://maven.fabricmc.net")
+-                }
+-            }
+-            filter {
+-                includeGroup("net.fabricmc")
+-                includeGroup("fabric-loom")
+-            }
+-        }
++        maven { url "https://maven.fabricmc.net/" }
+         exclusiveContent {
+             forRepository {
+                 maven {
+@@ -56,4 +45,15 @@ plugins {
+ }
+ 
+ rootProject.name = 'yungsbridges'
+-include("Common", "Fabric", "NeoForge")
+\ No newline at end of file
++def fabricOnly = startParameter.projectProperties.containsKey("fabricOnly")
++
++include("Common", "Fabric")
++
++if (!fabricOnly) {
++    include("NeoForge")
++}
++
++def yungApiSettings = file("../yungapi/settings.gradle")
++if (yungApiSettings.exists()) {
++    includeBuild("../yungapi")
++}
+-- 
+2.50.1.windows.1
+
+
+From 1d04005195c90d5278bdc551d8b6100b271843c2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=F0=9F=A7=80=20Harold?=
+ <55301634+ZECHEESELORD@users.noreply.github.com>
+Date: Wed, 3 Jun 2026 18:18:16 -0400
+Subject: [PATCH 2/2] Update bridge worldgen codecs for 1.21.11
+
+---
+ .../yungsbridges/mixin/SuppressLogMixin.java   |  2 +-
+ .../world/feature/AbstractTemplateFeature.java |  6 +++---
+ .../MultipleAttemptSingleRandomFeature.java    |  2 --
+ .../feature/config/BridgeFeatureConfig.java    | 12 ++++++------
+ ...ltipleAttemptSingleRandomFeatureConfig.java |  2 --
+ .../world/placement/BridgePlacement.java       |  4 +---
+ .../placement/RngInitializerPlacement.java     |  2 --
+ .../processor/ITemplateFeatureProcessor.java   | 18 +++++++++---------
+ .../module/BiomeModificationModuleFabric.java  |  8 ++++----
+ 9 files changed, 24 insertions(+), 32 deletions(-)
+
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/mixin/SuppressLogMixin.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/mixin/SuppressLogMixin.java
+index 21bd1f7..322decb 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/mixin/SuppressLogMixin.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/mixin/SuppressLogMixin.java
+@@ -1,6 +1,6 @@
+ package com.yungnickyoung.minecraft.yungsbridges.mixin;
+ 
+-import net.minecraft.Util;
++import net.minecraft.util.Util;
+ import org.spongepowered.asm.mixin.Mixin;
+ import org.spongepowered.asm.mixin.injection.At;
+ import org.spongepowered.asm.mixin.injection.Inject;
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/AbstractTemplateFeature.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/AbstractTemplateFeature.java
+index 55a8cfc..29b244e 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/AbstractTemplateFeature.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/AbstractTemplateFeature.java
+@@ -4,7 +4,7 @@ import com.mojang.serialization.Codec;
+ import com.yungnickyoung.minecraft.yungsbridges.YungsBridgesCommon;
+ import com.yungnickyoung.minecraft.yungsbridges.world.processor.ITemplateFeatureProcessor;
+ import net.minecraft.core.BlockPos;
+-import net.minecraft.resources.ResourceLocation;
++import net.minecraft.resources.Identifier;
+ import net.minecraft.util.RandomSource;
+ import net.minecraft.world.level.WorldGenLevel;
+ import net.minecraft.world.level.levelgen.feature.Feature;
+@@ -37,7 +37,7 @@ public abstract class AbstractTemplateFeature<C extends FeatureConfiguration> ex
+      * @param pos The position to generate the feature at. This will be the corner of the feature.
+      * @return The generated Template
+      */
+-    protected StructureTemplate createTemplate(ResourceLocation id, WorldGenLevel level, RandomSource randomSource, BlockPos pos) {
++    protected StructureTemplate createTemplate(Identifier id, WorldGenLevel level, RandomSource randomSource, BlockPos pos) {
+         return createTemplateWithPlacement(id, level, randomSource, pos, new StructurePlaceSettings());
+     }
+ 
+@@ -51,7 +51,7 @@ public abstract class AbstractTemplateFeature<C extends FeatureConfiguration> ex
+      * @return The generated Template
+      */
+     protected StructureTemplate createTemplateWithPlacement(
+-        ResourceLocation id,
++        Identifier id,
+         WorldGenLevel level,
+         RandomSource randomSource,
+         BlockPos cornerPos,
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/MultipleAttemptSingleRandomFeature.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/MultipleAttemptSingleRandomFeature.java
+index 199f3f8..c661e78 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/MultipleAttemptSingleRandomFeature.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/MultipleAttemptSingleRandomFeature.java
+@@ -1,7 +1,6 @@
+ package com.yungnickyoung.minecraft.yungsbridges.world.feature;
+ 
+ import com.yungnickyoung.minecraft.yungsbridges.world.feature.config.MultipleAttemptSingleRandomFeatureConfig;
+-import net.minecraft.MethodsReturnNonnullByDefault;
+ import net.minecraft.core.Holder;
+ import net.minecraft.world.level.levelgen.feature.Feature;
+ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
+@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
+  * Stops upon successful generation of a feature.
+  */
+ @ParametersAreNonnullByDefault
+-@MethodsReturnNonnullByDefault
+ public class MultipleAttemptSingleRandomFeature extends Feature<MultipleAttemptSingleRandomFeatureConfig> {
+     public MultipleAttemptSingleRandomFeature() {
+         super(MultipleAttemptSingleRandomFeatureConfig.CODEC);
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/BridgeFeatureConfig.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/BridgeFeatureConfig.java
+index 5b9a1e8..f736e22 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/BridgeFeatureConfig.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/BridgeFeatureConfig.java
+@@ -2,22 +2,22 @@ package com.yungnickyoung.minecraft.yungsbridges.world.feature.config;
+ 
+ import com.mojang.serialization.Codec;
+ import com.mojang.serialization.codecs.RecordCodecBuilder;
+-import net.minecraft.resources.ResourceLocation;
++import net.minecraft.resources.Identifier;
+ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
+ 
+ public class BridgeFeatureConfig implements FeatureConfiguration {
+     public static final Codec<BridgeFeatureConfig> CODEC = RecordCodecBuilder.create((codec) -> codec.group(
+-            ResourceLocation.CODEC.fieldOf("location").forGetter((config) -> config.id),
+-            Codec.BOOL.optionalFieldOf("is_z_axis", true).forGetter((config) -> config.isZAxis)
++            Identifier.CODEC.fieldOf("location").forGetter((BridgeFeatureConfig config) -> config.id),
++            Codec.BOOL.optionalFieldOf("is_z_axis", true).forGetter((BridgeFeatureConfig config) -> config.isZAxis)
+         ).apply(codec, BridgeFeatureConfig::new));
+ 
+-    /** ResourceLocation pointing to the structure's NBT */
+-    public final ResourceLocation id;
++    /** Identifier pointing to the structure's NBT */
++    public final Identifier id;
+ 
+     /** Rotation of the bridge. True if bridge should go north-south, false if east-west. */
+     public boolean isZAxis;
+ 
+-    public BridgeFeatureConfig(ResourceLocation id, boolean isZAxis) {
++    public BridgeFeatureConfig(Identifier id, boolean isZAxis) {
+         this.id = id;
+         this.isZAxis = isZAxis;
+     }
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/MultipleAttemptSingleRandomFeatureConfig.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/MultipleAttemptSingleRandomFeatureConfig.java
+index 3b2deb4..dd49606 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/MultipleAttemptSingleRandomFeatureConfig.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/feature/config/MultipleAttemptSingleRandomFeatureConfig.java
+@@ -2,7 +2,6 @@ package com.yungnickyoung.minecraft.yungsbridges.world.feature.config;
+ 
+ import com.mojang.serialization.Codec;
+ import com.mojang.serialization.codecs.RecordCodecBuilder;
+-import net.minecraft.MethodsReturnNonnullByDefault;
+ import net.minecraft.core.HolderSet;
+ import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
+@@ -12,7 +11,6 @@ import javax.annotation.ParametersAreNonnullByDefault;
+ import java.util.stream.Stream;
+ 
+ @ParametersAreNonnullByDefault
+-@MethodsReturnNonnullByDefault
+ public class MultipleAttemptSingleRandomFeatureConfig implements FeatureConfiguration {
+     public static final Codec<MultipleAttemptSingleRandomFeatureConfig> CODEC = RecordCodecBuilder.create(builder -> builder
+             .group(
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/BridgePlacement.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/BridgePlacement.java
+index 08f5bc2..73210ac 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/BridgePlacement.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/BridgePlacement.java
+@@ -5,7 +5,6 @@ import com.mojang.serialization.Codec;
+ import com.mojang.serialization.MapCodec;
+ import com.mojang.serialization.codecs.RecordCodecBuilder;
+ import com.yungnickyoung.minecraft.yungsbridges.module.PlacementModifierTypeModule;
+-import net.minecraft.MethodsReturnNonnullByDefault;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.util.RandomSource;
+ import net.minecraft.world.level.levelgen.Heightmap;
+@@ -20,7 +19,6 @@ import java.util.stream.Stream;
+  * Each bridge requires solid land on either side of it,
+  * as well as a certain distance of water only between the two ends.
+  */
+-@MethodsReturnNonnullByDefault
+ public class BridgePlacement extends PlacementModifier {
+     public static final MapCodec<BridgePlacement> CODEC = RecordCodecBuilder.mapCodec((codec) ->
+         codec.group(
+@@ -204,4 +202,4 @@ public class BridgePlacement extends PlacementModifier {
+     public PlacementModifierType<?> type() {
+         return PlacementModifierTypeModule.BRIDGE_PLACEMENT;
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/RngInitializerPlacement.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/RngInitializerPlacement.java
+index 281caef..8ae493e 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/RngInitializerPlacement.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/placement/RngInitializerPlacement.java
+@@ -2,7 +2,6 @@ package com.yungnickyoung.minecraft.yungsbridges.world.placement;
+ 
+ import com.mojang.serialization.MapCodec;
+ import com.yungnickyoung.minecraft.yungsbridges.module.PlacementModifierTypeModule;
+-import net.minecraft.MethodsReturnNonnullByDefault;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.util.RandomSource;
+ import net.minecraft.world.level.levelgen.placement.PlacementContext;
+@@ -16,7 +15,6 @@ import java.util.stream.Stream;
+  * Properly initializes this placement's Random seed (which MC doesn't do on its own)
+  * to maximize variability in feature placement.
+  */
+-@MethodsReturnNonnullByDefault
+ @ParametersAreNonnullByDefault
+ public class RngInitializerPlacement extends PlacementModifier {
+     private static final RngInitializerPlacement INSTANCE = new RngInitializerPlacement();
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/processor/ITemplateFeatureProcessor.java b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/processor/ITemplateFeatureProcessor.java
+index 82c6614..b2f170b 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/processor/ITemplateFeatureProcessor.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/yungsbridges/world/processor/ITemplateFeatureProcessor.java
+@@ -5,7 +5,7 @@ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.registries.Registries;
+-import net.minecraft.resources.ResourceLocation;
++import net.minecraft.resources.Identifier;
+ import net.minecraft.tags.TagKey;
+ import net.minecraft.util.RandomSource;
+ import net.minecraft.world.level.WorldGenLevel;
+@@ -34,10 +34,10 @@ import java.util.function.Supplier;
+  */
+ public interface ITemplateFeatureProcessor {
+     BlockState AIR = Blocks.AIR.defaultBlockState();
+-    TagKey<Biome> BADLANDS_TAG = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/badlands"));
+-    TagKey<Biome> TAIGA_TAG = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/taiga"));
+-    TagKey<Biome> SAVANNA_TAG = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/savanna"));
+-    TagKey<Biome> JUNGLE_TAG = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/jungle"));
++    TagKey<Biome> BADLANDS_TAG = TagKey.create(Registries.BIOME, Identifier.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/badlands"));
++    TagKey<Biome> TAIGA_TAG = TagKey.create(Registries.BIOME, Identifier.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/taiga"));
++    TagKey<Biome> SAVANNA_TAG = TagKey.create(Registries.BIOME, Identifier.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/savanna"));
++    TagKey<Biome> JUNGLE_TAG = TagKey.create(Registries.BIOME, Identifier.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "collections/jungle"));
+ 
+     /**
+      * Processes the given template when placing a feature.
+@@ -113,10 +113,10 @@ public interface ITemplateFeatureProcessor {
+     default BlockState getWallBlockWithState(BlockState input, BlockState source) {
+         if (input.getBlock() instanceof WallBlock && source.getBlock() instanceof WallBlock) {
+             return input
+-                    .setValue(WallBlock.NORTH_WALL, source.hasProperty(WallBlock.NORTH_WALL) ? source.getValue(WallBlock.NORTH_WALL) : WallSide.NONE)
+-                    .setValue(WallBlock.EAST_WALL, source.hasProperty(WallBlock.EAST_WALL) ? source.getValue(WallBlock.EAST_WALL) : WallSide.NONE)
+-                    .setValue(WallBlock.SOUTH_WALL, source.hasProperty(WallBlock.SOUTH_WALL) ? source.getValue(WallBlock.SOUTH_WALL) : WallSide.NONE)
+-                    .setValue(WallBlock.WEST_WALL, source.hasProperty(WallBlock.WEST_WALL) ? source.getValue(WallBlock.WEST_WALL) : WallSide.NONE)
++                    .setValue(WallBlock.NORTH, source.hasProperty(WallBlock.NORTH) ? source.getValue(WallBlock.NORTH) : WallSide.NONE)
++                    .setValue(WallBlock.EAST, source.hasProperty(WallBlock.EAST) ? source.getValue(WallBlock.EAST) : WallSide.NONE)
++                    .setValue(WallBlock.SOUTH, source.hasProperty(WallBlock.SOUTH) ? source.getValue(WallBlock.SOUTH) : WallSide.NONE)
++                    .setValue(WallBlock.WEST, source.hasProperty(WallBlock.WEST) ? source.getValue(WallBlock.WEST) : WallSide.NONE)
+                     .setValue(WallBlock.UP, source.hasProperty(WallBlock.UP) ? source.getValue(WallBlock.UP) : true)
+                     .setValue(WallBlock.WATERLOGGED, source.hasProperty(WallBlock.WATERLOGGED) ? source.getValue(WallBlock.WATERLOGGED) : false);
+         } else {
+diff --git a/Fabric/src/main/java/com/yungnickyoung/minecraft/yungsbridges/module/BiomeModificationModuleFabric.java b/Fabric/src/main/java/com/yungnickyoung/minecraft/yungsbridges/module/BiomeModificationModuleFabric.java
+index 7cdd7f8..47bf0b8 100644
+--- a/Fabric/src/main/java/com/yungnickyoung/minecraft/yungsbridges/module/BiomeModificationModuleFabric.java
++++ b/Fabric/src/main/java/com/yungnickyoung/minecraft/yungsbridges/module/BiomeModificationModuleFabric.java
+@@ -5,7 +5,7 @@ import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
+ import net.fabricmc.fabric.api.biome.v1.ModificationPhase;
+ import net.minecraft.core.registries.Registries;
+ import net.minecraft.resources.ResourceKey;
+-import net.minecraft.resources.ResourceLocation;
++import net.minecraft.resources.Identifier;
+ import net.minecraft.tags.TagKey;
+ import net.minecraft.world.level.levelgen.GenerationStep;
+ 
+@@ -15,9 +15,9 @@ public class BiomeModificationModuleFabric {
+     }
+ 
+     private static void addFeaturesToBiomes() {
+-        BiomeModifications.create(ResourceLocation.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "bridge_addition"))
++        BiomeModifications.create(Identifier.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "bridge_addition"))
+                 .add(ModificationPhase.ADDITIONS,
+-                        context -> context.hasTag(TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "has_structure/bridge"))),
+-                        context -> context.getGenerationSettings().addFeature(GenerationStep.Decoration.SURFACE_STRUCTURES, ResourceKey.create(Registries.PLACED_FEATURE, ResourceLocation.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "bridge_list"))));
++                        context -> context.hasTag(TagKey.create(Registries.BIOME, Identifier.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "has_structure/bridge"))),
++                        context -> context.getGenerationSettings().addFeature(GenerationStep.Decoration.SURFACE_STRUCTURES, ResourceKey.create(Registries.PLACED_FEATURE, Identifier.fromNamespaceAndPath(YungsBridgesCommon.MOD_ID, "bridge_list"))));
+     }
+ }
+-- 
+2.50.1.windows.1
+

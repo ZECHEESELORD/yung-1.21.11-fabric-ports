@@ -1,0 +1,421 @@
+From f6bbd5d32435d258a701c7ab1e766176c9c4edb8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=F0=9F=A7=80=20Harold?=
+ <55301634+ZECHEESELORD@users.noreply.github.com>
+Date: Wed, 3 Jun 2026 18:17:24 -0400
+Subject: [PATCH 1/2] Port Better Strongholds build to Minecraft 1.21.11
+
+---
+ Common/build.gradle                      | 12 +++++++-----
+ Fabric/build.gradle                      | 13 +++++++------
+ build.gradle                             | 16 ++++++++++++----
+ gradle.properties                        | 18 ++++++++----------
+ gradle/wrapper/gradle-wrapper.properties |  2 +-
+ settings.gradle                          | 13 +++++++++++--
+ 6 files changed, 46 insertions(+), 28 deletions(-)
+
+diff --git a/Common/build.gradle b/Common/build.gradle
+index f53a1f9..4a95ea0 100644
+--- a/Common/build.gradle
++++ b/Common/build.gradle
+@@ -3,8 +3,8 @@ plugins {
+     id 'org.spongepowered.gradle.vanilla' version '0.2.1-SNAPSHOT'
+ }
+ 
+-def useLocalYungsApi = findProject(':yungsapi') != null
+-
++def localYungsApiDir = rootProject.file('../yungapi')
++def localYungsApiBuild = localYungsApiDir.exists() ? gradle.includedBuild('yungapi') : null
+ minecraft {
+     version(mc_version)
+     def aw = file("src/main/resources/${mod_id}.accesswidener")
+@@ -15,8 +15,10 @@ minecraft {
+ 
+ dependencies {
+     compileOnly group:'org.spongepowered', name:'mixin', version:'0.8.5'
+-    if (useLocalYungsApi) {
+-        compileOnly files("libs/YungsApi-${mc_version}-Common-${yungsapi_version}.jar")
++    if (localYungsApiBuild != null) {
++        def localYungsApiCommonJar = files(localYungsApiDir.toPath().resolve("Common/build/libs/YungsApi-${mc_version}-Common-${yungsapi_version}.jar"))
++        localYungsApiCommonJar.builtBy(localYungsApiBuild.task(':Common:jar'))
++        compileOnly(localYungsApiCommonJar)
+     } else {
+         compileOnly("com.yungnickyoung.minecraft.yungsapi:YungsApi:${mc_version}-Common-${yungsapi_version}")
+     }
+@@ -49,4 +51,4 @@ artifacts {
+     commonJava sourceSets.main.java.sourceDirectories.singleFile
+     commonResources sourceSets.main.resources.sourceDirectories.singleFile
+     commonGeneratedResources sourceSets.generated.resources.sourceDirectories.singleFile
+-}
+\ No newline at end of file
++}
+diff --git a/Fabric/build.gradle b/Fabric/build.gradle
+index de1549b..8b78fef 100644
+--- a/Fabric/build.gradle
++++ b/Fabric/build.gradle
+@@ -5,8 +5,8 @@ plugins {
+     id 'com.modrinth.minotaur'
+ }
+ 
+-def useLocalYungsApi = findProject(':yungsapi') != null
+-
++def localYungsApiDir = rootProject.file('../yungapi')
++def localYungsApiBuild = localYungsApiDir.exists() ? gradle.includedBuild('yungapi') : null
+ repositories {
+     maven { url "https://maven.shedaniel.me/" }
+     maven { url "https://maven.terraformersmc.com/releases/" }
+@@ -16,12 +16,13 @@ dependencies {
+     minecraft "com.mojang:minecraft:${mc_version}"
+     mappings loom.layered {
+         officialMojangMappings()
+-        parchment("org.parchmentmc.data:parchment-${parchment_minecraft}:${parchment_version}@zip")
+     }
+ 
+     // YUNG's API
+-    if (useLocalYungsApi) {
+-        modImplementation files("libs/YungsApi-${mc_version}-Fabric-${yungsapi_version}.jar")
++    if (localYungsApiBuild != null) {
++        def localYungsApiFabricJar = files(localYungsApiDir.toPath().resolve("Fabric/build/libs/YungsApi-${mc_version}-Fabric-${yungsapi_version}.jar"))
++        localYungsApiFabricJar.builtBy(localYungsApiBuild.task(':Fabric:remapJar'))
++        modImplementation(localYungsApiFabricJar)
+     } else {
+         modImplementation "com.yungnickyoung.minecraft.yungsapi:YungsApi:${mc_version}-Fabric-${yungsapi_version}"
+     }
+@@ -107,4 +108,4 @@ modrinth {
+         optional.project "modmenu"
+     }
+ }
+-tasks.modrinth.dependsOn(tasks.remapJar)
+\ No newline at end of file
++tasks.modrinth.dependsOn(tasks.remapJar)
+diff --git a/build.gradle b/build.gradle
+index 081b607..591e0f6 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,11 +1,19 @@
+ plugins {
+-    id 'fabric-loom' version '1.10-SNAPSHOT' apply false
++    id 'fabric-loom' version '1.13.6' apply false
+     id "org.jetbrains.gradle.plugin.idea-ext" version "1.1.7" // required for NeoGradle
+     id 'org.spongepowered.mixin' version '0.7-SNAPSHOT' apply false
+     id 'net.darkhax.curseforgegradle' version "${curseforgegradle_version}" apply false // curseforge publishing
+     id "com.modrinth.minotaur" version "2.+" apply false // modrinth publishing
+ }
+ 
++def publishCurseForgeProjects = [':Fabric:publishCurseForgeFabric']
++def publishModrinthProjects = [':Fabric:modrinth']
++
++if (findProject(':NeoForge') != null) {
++    publishCurseForgeProjects << ':NeoForge:publishCurseForgeNeoForge'
++    publishModrinthProjects << ':NeoForge:modrinth'
++}
++
+ subprojects {
+     configurations.all {
+         resolutionStrategy {
+@@ -20,9 +28,9 @@ subprojects {
+     }
+ }
+ 
+-task publishCurseForge(dependsOn: [':Fabric:publishCurseForgeFabric', ':NeoForge:publishCurseForgeNeoForge']) {
++task publishCurseForge(dependsOn: publishCurseForgeProjects) {
+ }
+-task publishModrinth(dependsOn: [':Fabric:modrinth', ':NeoForge:modrinth']) {
++task publishModrinth(dependsOn: publishModrinthProjects) {
+ }
+ task publishCurseAndModrinth(dependsOn: ['publishCurseForge', 'publishModrinth']) {
+-}
+\ No newline at end of file
++}
+diff --git a/gradle.properties b/gradle.properties
+index 59bb769..6f3d672 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -11,26 +11,24 @@ mod_description=A complete redesign of Minecraft's strongholds!
+ mod_credits=Thanks so much to all my patrons!
+ license=LGPLv3
+ maven_group=com.yungnickyoung.minecraft.betterstrongholds
+-mc_version=1.21.4
+-mc_version_range=[1.21.4, 1.22)
+-mc_version_range_fabric=>=1.21.4
+-parchment_minecraft=1.21.4
+-parchment_version=2024.12.22
++mc_version=1.21.11
++mc_version_range=[1.21.11, 1.22)
++mc_version_range_fabric=>=1.21.11
+ 
+ # CurseForge/Modrinth Publishing
+ curseforgegradle_version=1.1.15
+-compatible_versions=1.21.4
++compatible_versions=1.21.11
+ curseforge_project_id_fabric=480684
+ curseforge_project_id_neoforge=465575
+ modrinth_project_id=kidLKymU
+ debug_publish=true
+ 
+ # Common
+-yungsapi_version=5.4.0
++yungsapi_version=5.10.0-beta0
+ 
+ # Fabric
+-fabric_version=0.112.2
+-fabric_loader_version=0.16.9
++fabric_version=0.141.3
++fabric_loader_version=0.18.6
+ clothconfig_version_fabric=17.0.144
+ modmenu_version_fabric=13.0.3
+ 
+@@ -45,4 +43,4 @@ modrinthToken=""
+ 
+ # Gradle
+ org.gradle.jvmargs=-Xmx3G
+-org.gradle.daemon=false
+\ No newline at end of file
++org.gradle.daemon=false
+diff --git a/gradle/wrapper/gradle-wrapper.properties b/gradle/wrapper/gradle-wrapper.properties
+index d6e308a..260504c 100644
+--- a/gradle/wrapper/gradle-wrapper.properties
++++ b/gradle/wrapper/gradle-wrapper.properties
+@@ -1,5 +1,5 @@
+ distributionBase=GRADLE_USER_HOME
+ distributionPath=wrapper/dists
+-distributionUrl=https\://services.gradle.org/distributions/gradle-8.12-bin.zip
++distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.1-bin.zip
+ zipStoreBase=GRADLE_USER_HOME
+ zipStorePath=wrapper/dists
+diff --git a/settings.gradle b/settings.gradle
+index fab92a8..9233020 100644
+--- a/settings.gradle
++++ b/settings.gradle
+@@ -10,7 +10,7 @@ pluginManagement {
+                 }
+             }
+             filter {
+-                includeGroup("net.fabricmc")
++                includeGroupAndSubgroups("net.fabricmc")
+                 includeGroup("fabric-loom")
+             }
+         }
+@@ -56,4 +56,13 @@ plugins {
+ }
+ 
+ rootProject.name = 'betterstrongholds'
+-include("Common", "Fabric", "NeoForge")
+\ No newline at end of file
++include("Common", "Fabric")
++
++if (!startParameter.projectProperties.containsKey("fabricOnly")) {
++    include("NeoForge")
++}
++
++def localYungsApi = file("../yungapi")
++if (localYungsApi.exists()) {
++    includeBuild(localYungsApi)
++}
+-- 
+2.50.1.windows.1
+
+
+From 58533a4d7347ccdbcbdabf45a8bbfed6362e025c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=F0=9F=A7=80=20Harold?=
+ <55301634+ZECHEESELORD@users.noreply.github.com>
+Date: Wed, 3 Jun 2026 18:17:41 -0400
+Subject: [PATCH 2/2] Update Strongholds processors for 1.21.11
+
+---
+ .../mixin/LocateStrongholdCommandMixin.java   |  4 +--
+ .../world/processor/BannerProcessor.java      |  3 +-
+ .../world/processor/LegProcessor.java         |  6 ++--
+ .../world/processor/ArmorStandProcessor.java  | 29 ++++++++++---------
+ .../world/processor/ItemFrameProcessor.java   | 17 +++++++----
+ 5 files changed, 33 insertions(+), 26 deletions(-)
+
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/mixin/LocateStrongholdCommandMixin.java b/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/mixin/LocateStrongholdCommandMixin.java
+index 2cc68a6..6b10271 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/mixin/LocateStrongholdCommandMixin.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/mixin/LocateStrongholdCommandMixin.java
+@@ -6,7 +6,7 @@ import net.minecraft.commands.CommandSourceStack;
+ import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
+ import net.minecraft.network.chat.Component;
+ import net.minecraft.resources.ResourceKey;
+-import net.minecraft.resources.ResourceLocation;
++import net.minecraft.resources.Identifier;
+ import net.minecraft.server.commands.LocateCommand;
+ import net.minecraft.world.level.levelgen.structure.Structure;
+ import org.spongepowered.asm.mixin.Mixin;
+@@ -31,7 +31,7 @@ public class LocateStrongholdCommandMixin {
+                                                         ResourceOrTagKeyArgument.Result<Structure> result,
+                                                         CallbackInfoReturnable<Integer> ci) throws CommandSyntaxException {
+         Optional<ResourceKey<Structure>> optional = result.unwrap().left();
+-        if (optional.isPresent() && optional.get().location().equals(ResourceLocation.withDefaultNamespace("stronghold"))) {
++        if (optional.isPresent() && optional.get().identifier().equals(Identifier.withDefaultNamespace("stronghold"))) {
+             throw OLD_STRONGHOLD_EXCEPTION.create();
+         }
+     }
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/BannerProcessor.java b/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/BannerProcessor.java
+index 0a2248f..60c11a5 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/BannerProcessor.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/BannerProcessor.java
+@@ -72,7 +72,8 @@ public class BannerProcessor extends StructureProcessor {
+                                                              StructurePlaceSettings structurePlacementData) {
+         if (blockInfoGlobal.state().getBlock() instanceof AbstractBannerBlock) {
+             // Make sure we only operate on the placeholder banners
+-            if (blockInfoGlobal.state().getBlock() == Blocks.GRAY_WALL_BANNER && (blockInfoGlobal.nbt().get("patterns") == null || blockInfoGlobal.nbt().getList("patterns", 10).isEmpty())) {
++            if (blockInfoGlobal.state().getBlock() == Blocks.GRAY_WALL_BANNER
++                && (blockInfoGlobal.nbt().get("patterns") == null || blockInfoGlobal.nbt().getListOrEmpty("patterns").isEmpty())) {
+                 Banner banner = getRandomBanner(structurePlacementData.getRandom(blockInfoGlobal.pos()));
+                 Direction facing = blockInfoGlobal.state().getValue(BlockStateProperties.HORIZONTAL_FACING);
+                 BlockState newState = banner.getState().setValue(BlockStateProperties.HORIZONTAL_FACING, facing);
+diff --git a/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/LegProcessor.java b/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/LegProcessor.java
+index a84963d..beaf16a 100644
+--- a/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/LegProcessor.java
++++ b/Common/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/LegProcessor.java
+@@ -64,10 +64,10 @@ public class LegProcessor extends StructureProcessor implements ISafeWorldModifi
+             int yBelow = 1;
+ 
+             while (mutable.getY() > levelReader.getMinY()
+-                    && mutable.getY() < levelReader.getMaxY()
+-                    && (currBlockState.isAir() || !levelReader.getFluidState(mutable).isEmpty())) {
++                && mutable.getY() < levelReader.getMaxY()
++                && (currBlockState.isAir() || !levelReader.getFluidState(mutable).isEmpty())) {
+                 // Place block in vertical pillar
+-                levelReader.getChunk(mutable).setBlockState(mutable, stoneBrickSelector.get(randomSource), false);
++                setBlockStateSafe(levelReader, mutable, stoneBrickSelector.get(randomSource));
+ 
+                 // Generate rafters
+                 if (yBelow == 1) {
+diff --git a/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ArmorStandProcessor.java b/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ArmorStandProcessor.java
+index 8af4968..52b8a9c 100644
+--- a/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ArmorStandProcessor.java
++++ b/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ArmorStandProcessor.java
+@@ -34,7 +34,7 @@ public class ArmorStandProcessor extends StructureEntityProcessor {
+                                                                StructureTemplate.StructureEntityInfo globalEntityInfo,
+                                                                StructurePlaceSettings structurePlaceSettings) {
+         if (globalEntityInfo.nbt.getString("id").equals("minecraft:armor_stand")) {
+-            ListTag armorItems = globalEntityInfo.nbt.getList("ArmorItems", 10);
++            ListTag armorItems = globalEntityInfo.nbt.getListOrEmpty("ArmorItems");
+             RandomSource random = structurePlaceSettings.getRandom(globalEntityInfo.blockPos);
+ 
+             // Type depends on the helmet and nothing else
+@@ -49,16 +49,17 @@ public class ArmorStandProcessor extends StructureEntityProcessor {
+             boolean isRare = helmet.equals("\"minecraft:diamond_helmet\"");
+ 
+             CompoundTag newNBT = globalEntityInfo.nbt.copy();
++            ListTag newArmorItems = newNBT.getListOrEmpty("ArmorItems");
+             // Boots
+             String bootsString = isRare
+                     ? BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getRareBoots(random)).toString()
+                     : BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getCommonBoots(random)).toString();
+             if (!bootsString.equals("minecraft:air")) {
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(0)).putString("id", bootsString);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(0)).putByte("Count", (byte) 1);
++                ((CompoundTag) newArmorItems.get(0)).putString("id", bootsString);
++                ((CompoundTag) newArmorItems.get(0)).putByte("Count", (byte) 1);
+                 CompoundTag bootsTagNBT = new CompoundTag();
+                 bootsTagNBT.putInt("Damage", 0);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(0)).put("tag", bootsTagNBT);
++                ((CompoundTag) newArmorItems.get(0)).put("tag", bootsTagNBT);
+             }
+ 
+             // Leggings
+@@ -66,11 +67,11 @@ public class ArmorStandProcessor extends StructureEntityProcessor {
+                     ? BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getRareLeggings(random)).toString()
+                     : BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getCommonLeggings(random)).toString();
+             if (!leggingsString.equals("minecraft:air")) {
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(1)).putString("id", leggingsString);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(1)).putByte("Count", (byte) 1);
++                ((CompoundTag) newArmorItems.get(1)).putString("id", leggingsString);
++                ((CompoundTag) newArmorItems.get(1)).putByte("Count", (byte) 1);
+                 CompoundTag leggingsTagNBT = new CompoundTag();
+                 leggingsTagNBT.putInt("Damage", 0);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(1)).put("tag", leggingsTagNBT);
++                ((CompoundTag) newArmorItems.get(1)).put("tag", leggingsTagNBT);
+             }
+ 
+             // Chestplate
+@@ -78,11 +79,11 @@ public class ArmorStandProcessor extends StructureEntityProcessor {
+                     ? BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getRareChestplate(random)).toString()
+                     : BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getCommonChestplate(random)).toString();
+             if (!chestplateString.equals("minecraft:air")) {
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(2)).putString("id", chestplateString);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(2)).putByte("Count", (byte) 1);
++                ((CompoundTag) newArmorItems.get(2)).putString("id", chestplateString);
++                ((CompoundTag) newArmorItems.get(2)).putByte("Count", (byte) 1);
+                 CompoundTag chestplateTagNBT = new CompoundTag();
+                 chestplateTagNBT.putInt("Damage", 0);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(2)).put("tag", chestplateTagNBT);
++                ((CompoundTag) newArmorItems.get(2)).put("tag", chestplateTagNBT);
+             }
+ 
+             // Helmet
+@@ -90,11 +91,11 @@ public class ArmorStandProcessor extends StructureEntityProcessor {
+                     ? BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getRareHelmet(random)).toString()
+                     : BuiltInRegistries.ITEM.getKey(ArmorStandChances.get().getCommonHelmet(random)).toString();
+             if (!helmetString.equals("minecraft:air")) {
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(3)).putString("id", helmetString);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(3)).putByte("Count", (byte) 1);
++                ((CompoundTag) newArmorItems.get(3)).putString("id", helmetString);
++                ((CompoundTag) newArmorItems.get(3)).putByte("Count", (byte) 1);
+                 CompoundTag helmetTagNBT = new CompoundTag();
+                 helmetTagNBT.putInt("Damage", 0);
+-                ((CompoundTag) newNBT.getList("ArmorItems", 10).get(3)).put("tag", helmetTagNBT);
++                ((CompoundTag) newArmorItems.get(3)).put("tag", helmetTagNBT);
+                 globalEntityInfo = new StructureTemplate.StructureEntityInfo(globalEntityInfo.pos, globalEntityInfo.blockPos, newNBT);
+             }
+         }
+@@ -115,4 +116,4 @@ public class ArmorStandProcessor extends StructureEntityProcessor {
+     protected StructureProcessorType<?> getType() {
+         return StructureProcessorTypeModule.ARMORSTAND_PROCESSOR;
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ItemFrameProcessor.java b/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ItemFrameProcessor.java
+index 435fcc0..8f777b0 100644
+--- a/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ItemFrameProcessor.java
++++ b/Fabric/src/main/java/com/yungnickyoung/minecraft/betterstrongholds/world/processor/ItemFrameProcessor.java
+@@ -38,7 +38,9 @@ public class ItemFrameProcessor extends StructureEntityProcessor {
+             // Determine which pool we are grabbing from
+             String item;
+             try {
+-                item = globalEntityInfo.nbt.getCompound("Item").get("id").toString();
++                item = globalEntityInfo.nbt.getCompound("Item")
++                    .map(itemTag -> itemTag.getStringOr("id", "minecraft:air"))
++                    .orElse("minecraft:air");
+             } catch (Exception e) {
+                 BetterStrongholdsCommon.LOGGER.info("Unable to randomize item frame at {}", globalEntityInfo.blockPos);
+                 return globalEntityInfo;
+@@ -46,17 +48,20 @@ public class ItemFrameProcessor extends StructureEntityProcessor {
+ 
+             // Set the item in the item frame's NBT
+             CompoundTag newNBT = globalEntityInfo.nbt.copy();
+-            if (item.equals("\"minecraft:iron_sword\"")) { // Armoury pool
++            CompoundTag itemTag = newNBT.getCompoundOrEmpty("Item");
++            if (item.equals("minecraft:iron_sword")) { // Armoury pool
+                 String randomItemString = BuiltInRegistries.ITEM.getKey(ItemFrameChances.get().getArmouryItem(random)).toString();
+                 if (!randomItemString.equals("minecraft:air")) {
+-                    newNBT.getCompound("Item").putString("id", randomItemString);
++                    itemTag.putString("id", randomItemString);
++                    newNBT.put("Item", itemTag);
+                 } else {
+                     newNBT.remove("Item");
+                 }
+-            } else if (item.equals("\"minecraft:bread\"")) { // Storage pool
++            } else if (item.equals("minecraft:bread")) { // Storage pool
+                 String randomItemString = BuiltInRegistries.ITEM.getKey(ItemFrameChances.get().getStorageItem(random)).toString();
+                 if (!randomItemString.equals("minecraft:air")) {
+-                    newNBT.getCompound("Item").putString("id", randomItemString);
++                    itemTag.putString("id", randomItemString);
++                    newNBT.put("Item", itemTag);
+                 } else {
+                     newNBT.remove("Item");
+                 }
+@@ -90,4 +95,4 @@ public class ItemFrameProcessor extends StructureEntityProcessor {
+     protected StructureProcessorType<?> getType() {
+         return StructureProcessorTypeModule.ITEMFRAME_PROCESSOR;
+     }
+-}
+\ No newline at end of file
++}
+-- 
+2.50.1.windows.1
+
